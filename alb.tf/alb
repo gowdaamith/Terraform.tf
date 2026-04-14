@@ -1,0 +1,237 @@
+Resource : aws_lb
+
+aws_alb is know as aws_lb 
+
+Example : Application LoadBalancer 
+
+resource " aws_lb" "test"{
+  name= "aws_alb"
+  internal = false
+  load_balancer_type = "application"
+  security_groups = [var.security_group]
+  subnets = [var.subnets]
+ 
+  enable_deletion_protection = true
+  access_logs {
+    bucket = var.bucket
+    prefix = "alb_bucket"
+    enable = true
+  }
+  tags = {
+    Environment = "production "
+  }
+}
+
+Example: Network Load balancer 
+
+resource "aws_lb" "this"{
+  name = "aws_nlb"
+  internal = false
+  load_balancer_type= "network"
+  subnets = var.subnets_ids
+  enable_deletion_protection = true
+  tags {
+    Environment = "production"
+
+
+}
+
+
+Example :  subnet mapping 
+
+resource "aws_lb" "example"{
+  name = "example"
+  load_balancer_type = "network"
+
+  subnet_mapping {
+    subnet_id  = var.subnet_id
+    allocation_id= var.eip_id
+  }
+  subnet_mapping {
+    subnet_id = var.subnets2_id
+    allocation_id = var.eip2_id
+  }
+}
+
+ 
+
+Specifying the private ip addresss for an internal-facing load_balaner 
+the subnet mapping is only done for the nlb 
+
+resource "aws_lb" "example"{
+  name = "example"
+  load_balaner_type = "network"
+  internal = true
+   
+  subnet_mapping {
+    subnet_id = var.subnet1_id
+    private_ipv4_address = "10.0.1.15"
+  }
+  subnet_mapping {
+    subnet_id =var.subnet2_id
+    private_ipv4_address = "10.0.2.15"
+  }
+}
+
+Core Required Arguments 
+
+load_balancer_type = "application" or "network"
+
+subents = var.public_subnets
+subent_mapping {
+  subnet_id = var.subnet1
+  private_ipv4_address= "10.0.1.15"
+}
+
+
+name = "prod-alb"
+
+
+internal = false # public LB
+internal = true # private LB
+
+
+Networking and traffic control
+
+security_groups = [aws_security_groups.alb_sg.id]  # controls who can access the lb
+ip_address_type = "ipv4" or "dualstack" # ivp4 default
+
+
+enable_cross_zone_load_balancing =true  
+# Important for the network loadbalancers
+# Meaning traffic can go across AZs improve load distribution
+
+dns_record_client_routing_policy = "any_availability_zone"
+
+any_availability_zone = send traffic anywhere
+availability_zone_affinity = stick to the same AZ
+partial_availability_zone_affinity = try local first ,else go anywhere
+Policy	Behavior
+any_availability_zone	Route to ANY AZ
+availability_zone_affinity	Prefer same AZ as client
+partial_availability_zone_affinity	Prefer local AZ, fallback to others
+
+
+
+Logging and Monitoring 
+
+access_logs  # Store teh request logs in the s3
+
+access_logs{
+  bucket = aws_s3_bucket.logs.id
+  enable = true
+  prefix = "alb"
+}
+
+LOGS tcp connection 
+
+connection_logs {
+  bucket = aws_s3_bucket.logs.id
+  enable = true
+}
+
+Health check logs
+
+health_check_logs{
+  bucket = aws_s3_bucket.logs.id
+  enable=true
+}
+
+
+Preformance and behaviour
+
+idle_timeout = 120 # time before  closing the idle connection 
+client_keep_alive = 3600 # keep the connection alive -> reduce latency
+enable_http2 = true # better performace web_app
+
+Security feature
+
+desync_mitigation_mode= "defensive" # protects against http attack
+# other options 
+# monitor = attacks are not prevented ,only logged
+# defensive (default)  blocks malicious requests
+# strictest = alb blocks all suspicious requests ,even slightly malformed ones
+
+
+drop_invalid_header_fields = true
+# removes bad headers 
+
+enable_waf_fail_open =false
+# if waf fail 
+# false = block_traffic
+# true = allow_traffic 
+
+Reliability and Safety 
+
+enable_deletion_protectoin = true # prevents accidental deletion 
+enable_zonal_shift = true         # allow shifting of traffic away from bad AZ
+
+minimum_load_balancer_capacity {
+  capacity_units =1
+}
+# Reserve capcity for the advanced use 
+
+Headers and request control 
+
+xff_header_processing_mode = "append"
+# it append the client ip to the existing header 
+# incoming request> X-Forwarded-For: 1.1.1.1  
+# client IP: 2.2.2.2
+# After the alb(append) >X-Forwarded-For: 1.1.1.1, 2.2.2.2
+
+other options are 
+
+preserve:  alb does not modify the headers at all 
+# ex: X-Forwarded-For: 1.1.1.1
+
+remove : delete the headers completely 
+# ex: (no XFF header)
+
+
+preserve_host_header = true
+#ALB forwards the original host reader as is to your backend 
+with= true
+>> HOST: myapp.com # unchanged
+with = false
+>> HOST: internal-alb-123.amazonaws.com # changed 
+
+enable_xff_client_port = true 
+# alb add client  port along with the ip 
+without this : X-Forwarded-For: 192.168.1.10
+with this : X-Forwarded-For: 192.168.1.10:54321
+
+Advanced Networking 
+
+secondary_ips_auto_assigned_per_subnet =2
+# add extra ips -> better scaling
+
+subnet_mapping 
+subnet_mapping {
+  subnet_id= var.subnet.id
+  private_ipv4_address = "10.0.1.15"
+}
+
+enforce_security_group_inbound_rules_on_private_link_traffic = "on"
+# this enforces the security group rules even for privateLink trafficc
+
+ipam_pools= IP address management system in AWS
+
+
+ipam_pools {
+  ipv4_ipam_pool_id = "ipam-pool-123456"
+}
+
+its like take the ips from here instead of taking it from else where which are automatically allocated by the  aws
+
+
+minimum_load_balancer_capacity
+# How much minimum capacity AWS should reserver for your loadbalancer
+# normally aws scales the LB automatically like adds or removes the capacity based on the needs
+# but here we are telling the aws keep atleast X capacity ready 
+
+
+minimum_load_balancer_capacity {
+  capacity_units = 1
+}
+
+
