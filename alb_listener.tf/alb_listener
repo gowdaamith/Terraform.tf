@@ -148,6 +148,22 @@ resource "aws_lb_listener" "this"{
 }
 
 
+
+Client connects to ALB
+ALB checks:
+👉 “Are you logged in?”
+If not → redirect to Cognito login
+User logs in
+Cognito sends authorization code
+ALB exchanges code for tokens
+ALB validates token
+ALB creates session (cookie)
+If valid → request forwarded
+If invalid → ❌ request rejected
+
+
+
+
 Authenticate-OIDC Action 
 
 resource "aws_lb" "this"{
@@ -176,4 +192,430 @@ resource "aws_lb_listener" "this" {
     target_group_arn =var.target_group_arn 
 
   }
+
 }
+
+
+Client connects to ALB
+ALB checks:
+👉 “Are you already logged in?”
+If not → redirect to login (authorization endpoint)
+User logs in
+Provider sends authorization code
+ALB calls token endpoint
+ALB checks:
+👉 “Is this token from trusted issuer?”
+(Optional) ALB fetches user info
+ALB creates session (cookie)
+If valid → request forwarded
+If invalid → ❌ request rejected
+
+
+
+
+JWT validation Action 
+
+resource "aws_lb_listener" "this"{
+  load_balancer_arn =var.load_balancer_arn 
+  port = "443"
+  protocol = "HTTPS"
+  ssl_policy = "ELBSecurityPolicy-2016-08"
+  certificate_arn = var.certificate_arn 
+  
+  default_action {
+    type = "jwt-validation"
+    jwt-validation {
+      issuer =  "https://example.com"
+      jwks_endpoint = "https://example.com/.well-known/jwks.json"
+      additional_claim {
+        format = "string-array"
+        name   = "claim_name1"
+        values = ["value1", "value2"]
+      }
+      additional_claim {
+        format = "single-string"
+        name   = "claim_name2"
+        values = ["value1"]
+      }
+      }
+  }
+
+  default_action {
+    target_group_arn = aws_lb_target_group.test.id
+    type             = "forward"
+  }
+}
+
+Client connects to ALB (HTTPS)
+Client sends JWT token in request
+
+ALB checks:
+👉 “Is this token from the correct issuer?”
+ALB fetches keys from JWKS endpoint
+ALB verifies:
+👉 “Is this token signature valid?”
+ALB checks claims:
+👉 “Does this user have required permissions?”
+If valid → request forwardedIf invalid → ❌ request rejected
+
+The request would look like this :
+
+GET /api/orders HTTP/1.1
+Host: myapp.com
+Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
+Content-Type: application/json
+
+
+
+Mutual TLS authentication 
+
+resource "aws_lb" "this"{
+  load_balancer_type = "application "
+  
+}
+resource "aws_lb_target_group" "this" {
+  
+}
+resource "aws_lb_listener" "example" {
+  load_balancer_arn = aws_lb.example.id
+  port              = "443"
+  protocol          = "HTTPS"
+
+  ssl_policy        = "ELBSecurityPolicy-2016-08"
+  certificate_arn   = aws_acm_certificate.example.arn
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.example.id
+  }
+
+  mutual_authentication {
+    mode            = "verify"
+    trust_store_arn = aws_lb_trust_store.example.arn
+  }
+}
+
+how this work :
+Client connects to ALB (HTTPS)
+ALB sends its certificate
+ALB asks client:
+👉 “Send your certificate”
+Client sends certificate
+ALB checks:
+👉 “Is this signed by my trust store?”
+If valid → request forwarded
+If invalid → ❌ connection rejected
+
+
+
+
+___________________________________________________________________________________
+
+Required : 
+
+default_action = tells what to do when the request is received and where to forward it 
+load_balancer_arn = this is to tell to which load_balancer the listener is connected to 
+
+
+
+
+Optional : 
+
+region : tell where the resource will be managed  .Default to the region set in the provider configuration 
+
+alpn_policy : Name of the Application layer protocol negotiation policy  , can be set if the protocol is TLS .Valid values are HTTP1Only, HTTP2Only, HTTP2Optional, HTTP2Preferred, and None
+
+certificate_arn : arn of the certificate for encryption 
+
+mutual_authentication : this block is used to configure mutual authenication information where both the user and server will exchange the certificate and  encrypt the communication between them 
+
+port = the port throught which the listener listen , not valid for the gateway load balancer
+
+protocol = the protocol for connection between the client and the load_balancer 
+           for the application load_balancer the valid values are HTTP and HTTPS ,with default of HTTP .For the network loadbalancers .valid values are TCP,TLS ,UPD,TCP_UDP ,QUIC and TCP_QUIC .Not valid to use UPD AND TCP_UDP if the dual stack mode is enabled  . Not valid to use QUIC or TCP_QUIC if security groups are configured or dual stakc mode is enabled . Not valid for gateway load_balaners
+
+
+ssl_policy : how to encrypt using the certificate , required if the  protocol is HTTPS and TLS  . default is ELBSecurityPolicy-2016-08.
+
+tcp_idle_timeout_seconds : can be only set if the protocol is  TCP on NETWORK LOAD_BALANCERS  or with gateway load_balancers .Not supported for application load balancers . valid values are between the 60 and 6000
+
+
+
+tags : used for billing and organization 
+tags{
+  name = "amith gowda"
+}
+
+
+
+
+server_header_control
+
+routing_http_response_server_enabled : "true" -headerispresent / "false" headerisnotpresent [ use it beccause of security ,best practise false ]
+# Enables you to allow or remove the HTTP response server header .Can oonly be set if the protocol is HTTP or HTTPS for application load balancers(only)
+[HIDE THE SERVER INFO]
+   
+routing_http_response_strict_transport_security_header_value = "max-age=31536000; includeSubDomains; preload "
+#Informs browsers that the site shoudl only be accessed using the https and that nay future attempts ot access it using http shoulld automatically be converted to HTTPS
+default values are max-age=31536000; includeSubDomains; preload
+Read the onsult the Strict-Transport-Security documentation for further details.
+[FORCE HTTPS]
+
+what it does is : 
+* Browser forces HTTPS
+* Even if the use types http -> auto converts  
+
+values: max-age=<seconds>
+optional: 
+   * includeSubdomains
+   * preload
+production : always enabled
+
+
+
+Cross origin resource sharing (CORS)
+
+used when frontend is not equal to backend
+
+*Allow origin 
+  routing_http_reponse_access_control_allow_origin__header_value =  "https://myfrontend.com"
+  
+  values:
+  * specific domain
+  * "*" not recommended 
+
+  Specifies which origins are allowed to access the server ,can only be set if the protocol is HTTP or HTTPS for application load balancers (only) 
+[ONLY THIS PATH CAN CALL ME ]
+
+*Allow method 
+   routing_http_response_access_control_allow_methods_header_value =  set which HTTP methods are allowed when accessing the server from a different origin ,can only be set if the protocol is HTTP or HTTPS for application load balancers .(only )
+
+valid values are : GET, HEAD, POST, DELETE,CONNECT,OPTIONS,TRACE,PATCH
+[WHICH METHODS ARE ALLOWED ]
+
+* Allow headers
+    routing_http_response_access_control_expose_headers_headers_value = Specific which header can be used during the request .Can only be set if protocol is HTTP or HTTPS for Application_load_balancers(only) 
+
+Valid values are :  *, Accept, Accept-Language, Cache-Control, Content-Language, Content-Length, Content-Type, Expires, Last-Modified, Pragma
+[WHAT DATA CAN FRONTEND CAN SEND?]
+
+
+* Allow Credentials:
+    routing_http_response_access_control_allow_credentials_header_value = specifies which header the browser can expose to the requesting client , can only be set if the protocol is HTTP or HTTPS  for application loadBalancer
+
+[CAN COOKIES / TOKENS CAN BE SENT]
+
+
+
+The only valid value is : true
+
+* Expose header 
+
+routing_http_response_access_control_expose_headers_header_value - Specifies whether the browser should include credentials such as cookies or authentication when making requests. Can only be set if protocol is HTTP or HTTPS for Application Load Balancers. .
+
+ Valid values are  *, Cache-Control, Content-Language, Content-Length, Content-Type, Expires, Last-Modified, or Pragma. Dependent on your use-case other headers can be exposed, consult the Access-Control-Expose-Headers documentation.
+[WHAT RESPONSE HEADERS CAN THE FRONTEND CAN SEE]
+
+Max_age
+
+routing_http_response_access_control_max_age_header_value - Specifies how long the results of a preflight request can be cached, in seconds. Can only be set if protocol is HTTP or HTTPS for Application Load Balancers(only)
+
+ Valid values are between 0 and 86400. This value is browser specific, consult the Access-Control-Max-Age documentation.
+[HOW LONG A BROWSER CAN REMEMBER THE CROS RULES]
+
+
+
+Content Security Policy 
+
+routing_http_response_content_security_policy_header_value : specific restriction enforceed by the browser to help minimize the risk of certain types of security threats  like : XSS attacks and malicious script
+
+example of a value is : "default-src 'self'; script-src 'self' https://trusted.com"
+[ONLY LOAD THE SCRIPTS FROM THE TRUSTED PLACES ]
+
+
+X-Content-Type-Options
+
+routing_http_response_x_content_type_options_header_value = 
+Prevents : MIME type sniffing attacks
+Values: only "nosniff"
+[BROWSER DON'T GUESS THE FILE TYPE - TRUST WHAT I SAY ]
+
+X-frame-options
+
+routing_http_response_x_frame_options_header_value
+Prevents clickjacking
+
+Values: 
+*DENY,SAMEORIGIN,ALLOW-FROM https://example.com
+[DON'T ALLOW MYSITE INSIDE AN IFRAME]
+
+mTLS Request Header
+Only used if mutual TLS is enabled 
+
+These pass client cretificate details to backend 
+
+Serial Number 
+routing_http_request_x_amzn_mtls_clientcert_serial_number_header_name = "X-Client-Serial"
+Value: Any custom header name
+[UNIQUE ID OF THE CERTIFICATE ]
+
+Issuer:
+routing_http_request_x_amzn_mtls_clientcert_issuer_header_name = "X-Client-Issuer"
+>> Who issued the client cert
+
+
+Subject:
+routing_http_request_x_amzn_mtls_clientcert_subject_header_name = "X-Client-Subject"
+>> Who the client is 
+
+Validity: 
+routing_http_request_x_amzn_mtls_clientcert_validity_header_name = "X-Client-Validity"
+>> Expriry Info
+
+Leaf_Certificate
+routing_http_request_x_amzn_mtls_clientcert_leaf_header_name = "X-Client-Cert"
+[ACTUAL CLIENT CERTIFICATE (ONLY THE MAIN ONE) EX: LIKE A COPY OF ADHAAR CARD]
+
+Full_certificate
+routing_http_request_x_amzn_mtls_clientcert_header_name = "X-Client-Cert-Full"
+
+Use case: 
+* Backend needs client identity
+[EX: ID+ PROOF OF WHO ISSUED IT + AUTHORITY CHAIN]
+
+
+TLS Info Headers
+
+>> TLS Version
+routing_http_request_x_amzn_tls_version_header_name = "X-TLS-Version"
+Value: TLSv1.2
+[HOW STRONG THE CONNECTION IS ]
+TLS 1.0 → old lock 🔓 (not safe)
+TLS 1.2 → good lock 🔐
+TLS 1.3 → best lock 🔒
+
+
+
+>> Cipher Suite
+routing_http_request_x_amzn_tls_cipher_suite_header_name = "X-TLS-Cipher"
+Value: ECDHE-RSA-AES128-GCM-SHA256
+[WHICH ENCRYPTION METHOD WAS USED]
+Like:
+
+Imagine:
+
+Lock type
+Key type
+Security method
+All combined = cipher suite
+
+Use case : Logging and security audits
+
+
+authenticate_cognito
+The following arguments are required:
+
+user_pool_arn - (Required) ARN of the Cognito user pool.
+user_pool_client_id - (Required) ID of the Cognito user pool client.
+user_pool_domain - (Required) Domain prefix or fully-qualified domain name of the Cognito user pool.
+
+The following arguments are optional:
+
+authentication_request_extra_params - (Optional) Query parameters to include in the redirect request to the authorization endpoint. Max: 10. See below.
+on_unauthenticated_request - (Optional) Behavior if the user is not authenticated. Valid values are deny, allow and authenticate.
+scope - (Optional) Set of user claims to be requested from the IdP.
+session_cookie_name - (Optional) Name of the cookie used to maintain session information.
+session_timeout - (Optional) Maximum duration of the authentication session, in seconds.
+authentication_request_extra_params
+key - (Required) Key of query parameter.
+value - (Required) Value of query parameter.
+
+
+authenticate_oidc
+The following arguments are required:
+
+authorization_endpoint - (Required) Authorization endpoint of the IdP.
+client_id - (Required) OAuth 2.0 client identifier.
+client_secret - (Required) OAuth 2.0 client secret.
+issuer - (Required) OIDC issuer identifier of the IdP.
+token_endpoint - (Required) Token endpoint of the IdP.
+user_info_endpoint - (Required) User info endpoint of the IdP.
+The following arguments are optional:
+
+authentication_request_extra_params - (Optional) Query parameters to include in the redirect request to the authorization endpoint. Max: 10.
+on_unauthenticated_request - (Optional) Behavior if the user is not authenticated. Valid values: deny, allow and authenticate
+scope - (Optional) Set of user claims to be requested from the IdP.
+session_cookie_name - (Optional) Name of the cookie used to maintain session information.
+session_timeout - (Optional) Maximum duration of the authentication session, in seconds.
+
+
+fixed_response
+The following arguments are required:
+
+content_type - (Required) Content type. Valid values are text/plain, text/css, text/html, application/javascript and application/json.
+The following arguments are optional:
+
+message_body - (Optional) Message body.
+status_code - (Optional) HTTP response code. Valid values are 2XX, 4XX, or 5XX.
+forward
+The following arguments are required:
+
+target_group - (Required) Set of 1-5 target group blocks. See below.
+The following arguments are optional:
+
+stickiness - (Optional) Configuration block for target group stickiness for the rule. See below.
+target_group
+The following arguments are required:
+
+arn - (Required) ARN of the target group.
+The following arguments are optional:
+
+weight - (Optional) Weight. The range is 0 to 999.
+stickiness
+The following arguments are required:
+
+duration - (Required) Time period, in seconds, during which requests from a client should be routed to the same target group. The range is 1-604800 seconds (7 days).
+The following arguments are optional:
+
+enabled - (Optional) Whether target group stickiness is enabled. Default is false.
+
+
+
+jwt_validation
+The following arguments are required:
+
+issuer - (Required) Issuer of the JWT.
+jwks_endpoint - (Required) JSON Web Key Set (JWKS) endpoint. This endpoint contains JSON Web Keys (JWK) that are used to validate signatures from the provider. This must be a full URL, including the HTTPS protocol, the domain, and the path.
+The following arguments are optional:
+
+additional_claim - (Optional) Repeatable configuration block for additional claims to validate.
+additional_claim
+The following arguments are required:
+
+format - (Required) Format of the claim value. Valid values are single-string, string-array and space-separated-values.
+name - (Required) Name of the claim to validate. exp, iss, nbf, or iat cannot be specified because they are validated by default.
+values - (Required) List of expected values of the claim.
+redirect
+NOTE::
+You can reuse URI components using the following reserved keywords: #{protocol}, #{host}, #{port}, #{path} (the leading "/" is removed) and #{query}.
+
+The following arguments are required:
+
+status_code - (Required) HTTP redirect code. The redirect is either permanent (HTTP_301) or temporary (HTTP_302).
+The following arguments are optional:
+
+host - (Optional) Hostname. This component is not percent-encoded. The hostname can contain #{host}. Defaults to #{host}.
+path - (Optional) Absolute path, starting with the leading "/". This component is not percent-encoded. The path can contain #{host}, #{path}, and #{port}. Defaults to /#{path}.
+port - (Optional) Port. Specify a value from 1 to 65535 or #{port}. Defaults to #{port}.
+protocol - (Optional) Protocol. Valid values are HTTP, HTTPS, or #{protocol}. Defaults to #{protocol}.
+query - (Optional) Query parameters, URL-encoded when necessary, but not percent-encoded. Do not include the leading "?". Defaults to #{query}.
+mutual_authentication
+advertise_trust_store_ca_names - (Optional when mode is verify, invalid otherwise) Valid values are off and on.
+ignore_client_certificate_expiry - (Optional when mode is verify, invalid otherwise) Whether client certificate expiry is ignored. Default is false.
+mode - (Required) Valid values are off, passthrough, and verify.
+trust_store_arn - (Required when mode is verify, invalid otherwise) ARN of the elbv2 Trust Store.
+Attribute Reference
+This resource exports the following attributes in addition to the arguments above:
+
+arn - ARN of the listener.
+tags_all - A map of tags assigned to the resource, including those inherited from the provider default_tags configuration block.
