@@ -1,8 +1,179 @@
 Example:
 
 
-resource "aws_lb" "front_end"{
-
+resource "aws_lb" "this"{
+  
+}
+resource "aws_lb_target_group" "this"{
+  
 }
 
-resourc:
+resource "aws_lb_listener" "this"{
+  load_balancer_arn = var.load_balancer_arn
+  port = "443"
+  protocol = "HTTPS"
+  ssl_policy = "ELBSecurityPolicy-2016-08"
+  certificate_arn = "arn:aws:iam::187416307283:server-certificate/test_cert_rab3wuqwgja25ct3n4jdj2tzu4"
+  
+  default_action {
+    type = "forward"
+    target_group_arn = var.target_group_arn 
+
+  }
+}
+
+With Weight target groups:
+
+resource "aws_lb" "this" {
+  
+}
+resource "aws_lb_target_group" "this"{
+  
+}
+resource "aws_lb_listener" "this"{
+  load_balancer_arn = var.load_balancer_arn
+  port = "443"
+  protocol= "HTTPS"
+  ssl_policy = "ELBSecurityPolicy-2016-08"
+  certificate_arn = "arn:aws:iam::187416307283:server-certificate/test_cert_rab3wuqwgja25ct3n4jdj2tzu4"
+  
+  default_action {
+    type = "forward"
+    
+    forward {
+      target_group {
+        arn = var.target_group_arn 
+        weight = 100
+      }
+      target_group {
+        arn = var.target_group_arn
+         weight = 0
+      }
+
+  }
+}
+
+
+To a NLB : 
+
+resource "aws_lb_listener" "this"{
+  load_balancer_arn = var.load_balaner_arn
+  port  = "443"
+  protocol = "HTTPS"
+  ssl_certificate = "ELBSecurityPolicy-2016-08"
+  certificate_arn = "arn:aws:iam::187416307283:server-certificate/test_cert_rab3wuqwgja25ct3n4jdj2tzu4"
+  alpn_policy = "HTTP2Preferred"
+  
+  default_action {
+    type = "forward"
+    target_group_arn = var.target_group_arn 
+  }
+}
+
+
+Redirect Action :
+
+resource "aws_lb_listener" "this"{
+  load_balancer_arn =  var.load_balancer_arn
+  port = "80"
+  protocol = "HTTP"
+  default_action {
+    type = "Redirect "
+    redirect {
+      port = "443"
+      protocol = "HTTPS"
+      status_code = "HTTP_301"
+    }
+  }
+}
+
+
+Fixed-response Action
+
+resource "aws_lb_listener" "this "{
+  load_balancer_arn = var.load_balancer_arn
+  port = "80"
+  protocol = "HTTP"
+  
+  default_action {
+    type = "fixed_response"
+    
+    fixed_response {
+      content_type = "text/plain"
+      message_body = "Fixed response content"
+      status_code = "200"
+
+    }
+  }
+}
+
+
+
+  
+Authenticate-cognito Action 
+
+resource "aws_lb" "this"{
+
+}
+resource "aws_lb_target_group" "this"{
+
+}
+resource "aws_congnito_user_pool" "pool"{
+  
+}
+resource "aws_congnito_user_pool_client" "pool" {
+  
+}
+resource "aws_congnito_user_pool_domain" "domain" {
+ 
+}
+
+resource "aws_lb_listener" "this"{
+  load_balaner_arn = var.load_balaner_arn
+  port = "80"
+  protocol = "HTTP"
+  default_action {
+    type = "authenticate-cognito"
+    
+    authenticate-cognito {
+      user_pool_arn = var.user_pool_arn
+      user_pool_client_id =var.pool_client_arn
+      user_pool_domain = var.pool_domain
+    }
+  }
+  default_action {
+    type = "forward"
+    target_group_arn = var.target_group_arn 
+  }
+}
+
+
+Authenticate-OIDC Action 
+
+resource "aws_lb" "this"{
+  
+}
+resource "aws_lb_target_group" "this"{
+  
+}
+resource "aws_lb_listener" "this" {
+  load_balancer_arn = var.load_balaner_arn
+  port = "80"
+  protocol = "HTTP"
+  default_action {
+    type = "authenticate-oidc"
+    authenticate-oidc {
+      authorication_endpoint = "https://example.com/authorization_endpoint"  # this is where the login happens
+      client_id = "client_id"   # which app is requesting the login  which is given by the congnito in the app client 
+      client_secret = "client_secret" # apps private password 
+      issuer  = "https://example.com"  # who issued the token
+      token_endpoint =  "https://example.com/token_endpoint"   # after the login the cognito or the google send the authorization code alb exchange this for the ID token and access token 
+      user_info_endpoint = "https://example.com/user_info_endpoint"  # used to fetch user details like email .username and attribute 
+    }
+  }
+  default_action {
+    type = "forward"
+    target_group_arn =var.target_group_arn 
+
+  }
+}
