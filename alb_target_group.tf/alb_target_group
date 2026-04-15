@@ -1,0 +1,148 @@
+Example: Instance_target_group
+
+resource "aws_lb_target_group" "this"{
+  name = "new_target_Group"
+  port = 80
+  protocol  = "HTTP"
+  vpc_id = var.vpc_id
+  
+ }
+
+
+IP target group
+
+resource "aws_lb_target_group""this"{
+  name = "new_ip_target_group"
+  port=80
+  protocol = "HTTP"
+  target_type = "ip"
+  vpc_id = var.vpc_id
+
+}
+
+Lambda target group 
+
+resource "aws_lb_target_group" "this"{
+  name = "new_lambda_target_group"
+  target_type = "lambda"
+}
+
+alb target group
+
+resource "aws_lb_target_group" "this"{
+  name =  "new_alb_target_group"
+  target_type = "alb"
+  port = 80
+  protocol =  "tcp"
+  vpc_id = var.vpc_id
+
+}
+
+target_group_with_health_requirements
+
+resource "aws_lb_target_group""health"{
+  name = "enableing the health check"
+  port = 80
+  protocol = "TCP"
+  vpc_id = var.vpc_id
+
+   target_group_health{
+     dns_failover {  # AWS check health per AZs  if the health drops below the threshold  mark this AZ as unhealthy in DNS
+       minimum_healthy_target_count = "1"
+       minimum_healthy_target_percentage = "off"
+     }
+     unhealthy_state_rounting {  # if healthy targets are below threshold instead of dropping traffic -> send traffic to all targets (event to unhealthy ones_)
+       minimum_healthy_target_count = "1"
+       minimum_healthy_target_percentage = "off"
+   }
+}
+
+
+region  # (optional)  region where this resource will be managed . Default to the region set in the provider configuration 
+
+connection_termination #(optional)  controls what happens when the target is removed 
+
+# true = existing connections are cut immediately 
+# false = connectiion are allowed to finish 
+( should we politely end the call or cut the call)
+
+
+deregistration_delay #(optional) Amount time for Elastic load Balancing to wait before changing that state of a deregistered target from draining to unused . The range is 0-3600 sec. The dafult value is 300 seconds 
+# during this time the target stosp receiving new traffic and complets the existing traffic 
+
+lambda_multi_value_headers_enabled = true | false # default false
+# used only when the target_type is lambda
+# it decides wheather the headers  with multiple values be sent as 
+  >> single string 
+          or 
+  >> an array of values
+
+
+if false it will be sent as a string 
+if true it will be sent as a array 
+
+
+load_balancing_algorithum_type #(optional) 
+# determines how the load balancer selects targets when routing requests .ONly applicable for application loadbalancers target gorups the valuse can be round_robin, least_outstanding_requests, or weighted_random. The default is round_robin
+
+load_balancing_anomaly_mitigationn= "on" | "off"  # (optional)
+# it helps the AWS to avoid sending traffic to the "bad behaving " targets that are not full unhealthy yet        
+
+This is used when the target_type is alb and load_balancing_algorithum_type = "weighted_random"
+
+load_balancing_cross_zone_enabled = "true" or "false" or "use_load_balancer_configuration" # inherit form alb or nlb setting
+# wheather traffic can go across AZss
+if true AZa traffic  can be sent to Az-b servers
+if false AZa traffic  can be sent only to the Aza servers 
+
+slow_start #(optional)
+# amount time for targets to warm up before the load balancer sends them a full share of requests  the rage is 30-9000 seconds the default value is 0
+
+vpc_id # identifier of the vpc in which to create the target group required when target_type is instance, ip and alb .Does not apoply when target_type is lambda
+
+ip_address_type = "ipv4 or ipv6" # the type of the ip address will be used by the target group .only suupported when target type is set to ip. Possible values are ipv4 or ipv6
+
+target_type # is the type of the target the loadbalancer will be reffering like ip instance lambda ip 
+
+name  = " the load balancer name"
+name_prefix = "alb-    " the prefix will be used and the name willl be completed by the aws automatically 
+
+port = 80 | 8080 |  # which port your backend is listening on 
+protocol = 'HTTP' | 'HTTP2' | 'TCP' # how the traffic is sent from the loadbalancer to the -> target
+
+protocol_version = "HTTP1" | "HTTP2" | "GRPC" # This tell how the http is formated
+
+preserver_client_ip = true # should the backend ec2 see real client ip 
+proxy_protocol_v2 = true # adds metadata headers: client IP + port info 
+
+
+stickiness {
+  type = "lb_cookie"
+  enable = true
+}
+Meaning : keep user stuck to same backend instances
+
+
+tags { 
+  environment = "prod"
+}
+
+
+health_check # means lb continuously sends requests to your backend to check whether its alive or responding correctly 
+
+if enable is true : the health check will be on 
+if enable is faluse : the health chekc is false
+
+healthy_threshold = 3
+  how many success response needed to mark instance HEALTHY 
+unhealthy_threshold = 3
+  how many failure response before making instance unhealthy 
+
+interval = 30 # how often aws checks health here the 30 is seconds 
+matcher = 200-299"  # what response means success
+path = "/health"  # which endpoint AWS hits 
+protocol = "HTTP" # throught which protocol the health check is done 
+timeout = 5 # for how much long the AWS wait for the response 
+
+
+

@@ -1,0 +1,227 @@
+forward_action
+
+
+resource "aws_lb" "this"{
+ 
+}
+resource "aws_lb_target_group" "this"{
+  
+}
+
+resource "aws_lb_listeners" "this"{
+  load_balaner_arn = aws_lb.front_end.arn
+  port =  "443"
+  protocol= "HTTPS"
+  certificate_arn = var.certificate_arn  # aws generates the certificates for your domain ,free of cost  ,and auto renewed 
+  ssl_policy        = "ELBSecurityPolicy-2016-08"  # AWS already provides predefined policies  you just choose one 
+
+  default_action {
+    type = "forward"
+    target_group_arn =var.target_group_arn
+  }
+}
+
+with weighted target_group
+
+resource "aws_lb_listener" "this" {
+  load_balancer_arn = var.loadbalancer_arn
+  port = "443"
+  protocol = "HTTPS"
+  ssl_policy = "ELBSecurityPolicy-2016-08"
+  certificate_arn = "arn:aws:iam::187416307283:server-certificate/test_cert_rab3wuqwgja25ct3n4jdj2tzu4"
+
+  default_actions {
+    type = "forward"
+    
+    forward  {
+      target_group {
+        arn = aws_lb_target_group.this1.arn
+        weight = 100
+      }
+      target_group {
+        arn = aws_lb_target_group.this2.arn
+        weight = 0 
+      }
+    }
+  }
+
+
+To a NLB
+
+resource "aws_lb_listener" "this"{
+  load_balancer_arn = var.load_balancer_arn
+  port = "443"
+  protocol = "TLS"
+  ssl_policy  = "ELBSecurityPolicy-2016-08"
+  certificate_arn =  "arn:aws:iam::187416307283:server-certificate/test_cert_rab3wuqwgja25ct3n4jdj2tzu4"
+  alpn_policy = "HTTP2Preferred"  # only for the nlb ,no need to configure this for the ALB manually this will be handeled by it automatically 
+   
+  default_action = {
+    type = "forward"
+    target_group_arn = var.target
+  }
+}
+
+
+redirect action
+
+resource "aws_lb" "this"{
+  
+}
+resource "aws_lb_listener" "this"{
+  load_balancer_arn = var.load_balancer_arn
+  port = 80
+  protocol = "HTTP"
+  default_action {
+    type = "redirect"
+    redirect = {
+      port = "443"
+      protocol = "HTTPS"
+      status_code = "HTTPS_301"
+    }
+  }
+
+
+
+
+}
+
+# what it does is whenever the user hits HTTP (port 80) ,the load balancer tells them to go to HTTS (port 443)
+
+
+FIXED-response action 
+
+resource "aws_lb" "this"{
+}
+
+resource "aws_lb_listeners" "this"{
+  load_balancer_arn =var.load_balancer_arn
+  port = "80"
+  protocol = "HTTP"
+  default_action {
+    type = "fixed-response"
+    fixed_response {
+      content_type = "text/plain"
+      message_body ="fuck off"
+      status_code = "200"
+    }
+  }
+}
+
+Authenticate-cognito action 
+
+resource "aws_lb" "this"{
+}
+resource "aws_ls_target_group" "this"{
+}
+resource "aws_congnito_user_pool" "pool"{
+}
+resource "aws_congnito_user_pool_client" "client"{
+}
+resource "aws_congnito_user_pool_domain" "domain"{
+}
+resource "aws_lb_listeners" "this"{
+  load_balaner_arn = var.load_balaner_arn
+  port = "80"
+  protocol = "HTTP"
+  default_action {
+    type = "authentication-cognito"
+    
+    authenticate_cognito{
+      user_pool_arn = aws_congnito_user_pool.arn
+      user_pool_client_id = aws_congnito_user_pool_client.this.id
+      user_pool_domain = aws_congnito_user_pool_domain.this.domain
+    }
+  }
+  default_action{
+    type  = "forward"
+    target_group_arn = aws_lb_target_group.front_end.arn
+  }
+}
+
+Authenticate-OIDC Action
+
+resource "aws_lb" "this"{
+  
+}
+resource "aws_lb_target_group" "this"{
+ 
+}
+resource "aws_lb_listeners" "this"{
+  load_balancer_arn = var.load_balancer_arn
+  port = "80"
+  protocol = 'HTTP"
+  
+  default_action {
+    type = "authenticate-oidc"
+    
+    authenticate_oidc {
+      authorization_endpoint = "https://example.com/authorization_endpoint" # where user logs in 
+      client_id = "client_id"  # your app's id in google 
+      client_secret = "client_secret"  # password of your app
+      issuer = "https://example.com"   # who issued the token  {alb verfies the does the token really came from the google} 
+      token_endpoint = "https://example.com/token_endpoint"  # convert the temporary code into token here 
+      user_info_endpoint = "https://example.com/user_info_endpoint" # get the user details 
+      
+}
+}
+     default_action {
+       type = "forward"
+       target_group_arn =aws_lb_target_group.front_end.arn
+     }
+}
+
+
+JWT validation action 
+
+resource "aws_lb_listener" "this"{
+  load_balancer_arn = var.load_balancer_arn 
+  protocol = 'HTTPS"
+  port = "443"
+  ssl_policy = "ELBSecurityPolicy-2016-08"
+  certificate_arn = aws_iam_server_certificate.test.arn
+  
+  default_action {
+    # instead of redirecting to the login this check if the incoming request already has a valid JWT token 
+    type = "jwt_validation "
+    
+
+    jwt_validation {
+      issuer = "https://example.com"
+      # who issued the token (ex: google ,autho, congnito)
+      # Used to verify token authenticity 
+      jwks_endpoint =  "https://example.com/.well-known/jwks.json"
+      # url to fetch the public keys 
+      # used to verify JWT signature 
+      additional_claim {
+        format = "string-array"
+        # claim value is an array (muliple values)
+        name = "claim_name1'
+        # name of the claim inside JWT
+        values = ["values1","values2"]
+        # allowed values -> request must contain one of these
+        additional_claim { 
+          format = "string-string"
+          # claim value is a string
+          name  = "claim_name2"
+          # Another claim to validate
+          values = ["value1"]
+          # must exactly match this value 
+
+            default_action {
+              type = "forward"  
+              # If JWT is valid → forward request
+
+              target_group_arn = aws_lb_target_group.test.id  
+              # Sends traffic to backend (EC2, containers, etc.)
+             }
+}
+
+
+| Feature         | authenticate-cognito | authenticate-oidc | jwt-validation |
+| --------------- | -------------------- | ----------------- | -------------- |
+| Login handled   | ✅ Yes                | ✅ Yes             | ❌ No        |
+| Token generated | ✅ Yes                | ✅ Yes             | ❌ No        |
+| Token validated | ✅ Yes                | ✅ Yes             | ✅ Yes       |
+| Manual work     | ❌ None               | ❌ None            | ⚠️ Needed     |
+

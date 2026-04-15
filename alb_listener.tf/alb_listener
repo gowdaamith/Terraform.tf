@@ -1,0 +1,8 @@
+Example:
+
+
+resource "aws_lb" "front_end"{
+
+}
+
+resourc:
