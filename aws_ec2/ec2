@@ -649,6 +649,114 @@ private_ip_address_count → number of private IPs to assign (default: 1)
 private_ip_addresses → manually assign specific private IPs
 
 
+private_dns_name_options - Used to control how the EC2 instance’s private DNS name (internal hostname inside VPC) is created and whether it supports IPv4/IPv6 resolution.
+
+
+hostname_type -> decide how the hostname is formed
+   * ip-name -> uses the  instance IP addresses in DNS name
+   * resource-name -> uses instance ID in the DNS name
+
+enable_resource_name_dns_a_record → allows IPv4 DNS (A record) for the instance name
+enable_resource_name_dns_aaaa_record → allows IPv6 DNS (AAAA record) for the instance name
+
+private_dns_name_options {
+  hostname_type                       = "ip-name"
+  enable_resource_name_dns_a_record   = true
+  enable_resource_name_dns_aaaa_record = false
+}
+
+
+spot_options - Used to control how a Spot EC2 instance behaves; Spot instances are cheaper but AWS can interrupt them anytime when capacity is needed.
+
+instance_interruption_behaviour -> what happens when AWS takes back the spot instace 
+
+"terminate" → instance is deleted (default)
+"stop" → instance is stopped (can restart later)
+"hibernate" → instance is paused and memory is saved
+
+max_price → maximum price you are willing to pay per hour for the instance
+
+spot_instance_type → how Spot request works
+"one-time" → runs once and stops when interrupted (default)
+"persistent" → keeps trying to restart after interruption
+
+valid_until → time until which Spot request is valid (only for persistent)
+
+spot_options {
+  instance_interruption_behavior = "stop"
+  max_price                      = "0.02"
+  spot_instance_type             = "persistent"
+}
+
+
+launch_template - Used to create an EC2 instance using a predefined blueprint (Launch Template) that already contains settings like AMI, instance type, security groups, etc.; but any values you define directly in the instance will override the template.
+
+id → unique ID of the launch template (example: lt-0abc123)
+name → name of the launch template (you use either name OR id, not both)
+version → which version of the template to use
+"$Latest" → always use newest version
+"$Default" → use default version (default behavior)
+"2" → specific version number
+
+
+launch_template {
+  id      = "lt-0abc123"
+  version = "$Latest"
+}
+
+
+
+argument_refferences 
+
+arn → unique AWS identifier of the instance\
+id → instance ID like i-123456
+instance_state → current status of instance
+outpost_arn → shows if instance is running on AWS Outposts (on-prem AWS hardware)
+primary_network_interface_id → ID of main network card (ENI)
+private_dns → internal hostname inside VPC
+public_dns → public hostname (if instance has internet access)
+public_ip → public IP address of instance
+password_data → encrypted Windows admin password (only if enabled)
+capacity_reservation_specification → shows reservation info used by instance
+tags_all → all tags applied to instance (including default provider tags)
+
+ebs_block_device_output
+volume_id → ID of attached disk
+
+
+root_block_device_output
+volume_id → ID of main disk (OS disk)
+device_name → disk name like /dev/sda1
+
+instance_market_options outputs:
+instance_lifecycle → shows if instance is:Spot,on-demand,scheduled
+spot_instance_request_id → ID if it’s a Spot instance
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
