@@ -1,0 +1,655 @@
+Basic example using AMI lookup 
+
+
+data "aws_ami" "this" {
+  most_recent = true
+  
+  filter {
+    name = "name"
+    values = [ "ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
+  }
+  filter {
+    name = "virtualiztion-type"
+    values = ["hvm"] 
+  }
+  owners = ["099720109477"]
+
+resource "aws_instances" "this"{
+  ami= data.aws_ami.this.id
+  instance_type = "t3.micro"
+  tags {
+    name = "helloworld"
+  }
+}
+
+
+Spot instance example:
+
+data "aws_ami" "this" {
+  most_recent = true
+  owners      = ["amazon"]
+  filter {
+    name   = "architecture"
+    values = ["arm64"]
+  }
+  filter {
+    name   = "name"
+    values = ["al2023-ami-2023*"]
+  }
+}
+
+resource "aws_instance" "this"{
+  ami = data.aws_ami.id
+  instance_market_option {
+    spot_options {
+      max_price = 0.0031
+    }
+  }
+  instance_type = "t4g.nanao"
+  tags = {
+    Name = "test_spot"
+  }
+}
+
+
+Network and credit specification 
+
+resource "aws_vpc"  "this" {
+  cidr_block = "172.16.0.0/16"
+  tags ={
+    Name = "tf-example"
+  }
+}
+
+resource "aws_subnet" "this" {
+  vpc_id = aws_vpc.this.id
+  cidr_block = "172.16.10.0/24"
+  availability_zone = "ap-south-1"
+  tags {
+    Name = "tf-example"
+  }
+}
+
+resource  "aws_network_interface " "this " {
+  subnet_id = aws_subnet.this.id
+  private_ips = [ "172.16.10.100"]
+  tags = {
+    Name = "primary network interface"
+  }
+}
+
+resource "aws_ami" "this" {
+  most_recent = true
+  owners = ["self"]
+  filter { 
+    name = "name"
+    values = ["my-custom-ami-*"]
+  }
+}
+
+
+
+
+
+resource "aws_instance" "this" {
+  ami = data.aws_ami.this.id
+  intance_type= "t2.micro"
+  network_interface {
+    network_interface_id = aws_network_interface.this.id
+    device_index = 0   # tell the network slot this interface accupies on the ec2 instance 
+  }
+  credit_specification {
+    cpu_credits = "unlimited"/"standard"
+  }
+}
+
+device_index = 0   → Primary network interface (eth0)
+device_index = 1   → Second interface (eth1)
+device_index = 2   → Third interface (eth2)
+
+CPU options example 
+
+resource "aws_vpc""this" {
+  cidr_block = "172.16.0.0/16" 
+  tags = {
+    Name = "my-vpc"
+  }
+}
+resource "aws_subnet" "this"{
+  vpc_id= aws_vpc.this.id
+  cidr_block = "172.16.10.0/24"
+  availability_zone = "ap-south-1a"
+  tags = {
+    Name = "my_subnet"
+  }
+}
+data "aws_ami" "this " {
+  most_recent = true
+  owners = ["amazon"]
+  filter {
+    name = "name"
+    values =  ["al2023-ami-2023.*-x86_64"]
+  }
+}
+resource "aws_instances" "example" {
+  subnet_id= aws_subnet.this.id
+  instance_type = "c6a.2xlarge"
+  ami =data.aws_ami.amzn-linux-2023-ami.id
+  
+  cpu_options {
+    core_count = 2
+    thread_per_count = 2
+  }
+  tags = {
+    Name = "my_instance"
+  }
+
+}
+
+
+host_resource_group 
+ 
+host_resource_group is a collection of dedicated hosts that you can manage as a single entity .As you launch instances .License manager allocates  the hosts  and launches instances on them based on the setting that you configured . 
+You can add existing  dedicated hosts to a host resource group and take advantage  of automated host management through licence manager
+
+Note : 
+ A dedicated host is automatically associated with a License manager host group if allocate hosts automatically is enabled .Otherwise .use the host_resource_group_arn argument to explicitly associate the instance with the host resource group .
+
+
+
+resource "aws_instanc" "this" {
+  ami = "ami-1234567890p"
+  instance_type = "m5.large"
+  host_resource_group_arn = "arn:aws:resource-groups:us-west-2:012345678901:group/win-testhost"
+  tenancy = "host"
+}
+
+
+Tag Guide : 
+
+There are five tags that you might encounter relative to the aws_instance 
+
+
+1.Instance tags = Applied to instances but not to the ebs_block_devic and root_block_device
+
+2.Default_tags= Applied to instances and to the ebs_block_device and root_blokc_device
+
+3.volume tags  = Applied during creation of ebs_block_device and root_block_device volumes
+
+4.Root_block_device tags = Applied only to the root_block_device volume . These conflict with volume tags 
+
+5.EBS_block_device tags = Applied only to specific ebs_block_device  .volume  you configure them for an dcannot be updated .These conflict with volume tags 
+
+
+Arguments: 
+
+ ami - ami is used to specify which OS/image the ec2 instance should use .   if you are not using a launch template you must provide it . if the 
+        launch template already has a AMI then this becomes optional and if   both are given this AMI will override the one in the template 
+
+        ami = "ami-1234567"
+    
+associate_public_ip_address - Used to specify wheather the instance will get the public ip address or not . if its given true then the instance will get the public ip address if its given false then the instance will not get the public ip address
+
+
+        associate_public_ip_address = true / false
+
+availability_zone - This is used to tell which availability_zone to lauch the instance 
+
+capacity_reservation_specification  - Used to specify whether the instances should use reserved capacity (pre-booked-compute) or nomally capacity ; this helps ensure the instance always has space to run 
+
+capacity_reservation_specification {
+  capacity_reservation_preference = "open"
+}
+
+means this instance can use available reserved capacity if it exits 
+
+
+
+cpu_core_count - Used to specify how many CPU cores the instance should use; it works only for instance types that support custom CPU settings and will give an error if not supported, and it is deprecated so you should use cpu_options instead. 
+       
+            cpu_core_count =2   #means the instance will use 2 CPU cores.
+
+
+
+cpu_thread_pre_core - Used to specify how many threads each CPU core should use; it only works if cpu_core_count is also set, setting it to 1 disables hyperthreading while 2 (default) enables it, and it is deprecated so cpu_options should be used instead.
+
+           cpu_core_count = 2 and cpu_threads_per_core = 1   # means 2 cores with no hyperthreading.
+
+
+cpu_options - Used to configure CPU settings like number of cores and threads per core for the instance; it replaces older options and gives more control over CPU behavior.
+
+           cpu_options { core_count = 2 
+                         threads_per_core = 1 } # means the instance will use 2 cores with no hyperthreading.
+
+
+credit_specification - Used to control how CPU credits work for burstable instances (like t2/t3), deciding whether the instance can go beyond its normal CPU limit or not; if you remove this from Terraform later it will just stop managing it but the setting will remain unchanged in AWS.
+
+            credit_specification { cpu_credits = "unlimited"/"standard  } means the instance can use extra CPU whenever needed.
+
+
+disable_api_stop - if true . enables ec2 instance stop protection 
+
+disbale_api_termination - if true ,enables ec2 instance termination protection 
+
+ebs_block_storage - Used to attach one or more extra EBS storage volumes to the instnace at the time of creation ; these disks are added only when the instance is launched and changing them later may recreate the instance  and since multiple volumes can be attached it is treated as a set of objects 
+
+              ebs_block_device { device_name = "/dev/sdb" 
+                                 volume_size = 20 
+                                 volume_type = "gp3" } # means a 20GB EBS disk of type gp3 is attached to the instance.
+
+ebs_optimize - Used to enable optimized (faster) performance for EBS storage by giving dedicated bandwidth to the instance; valid values are true or false, and some instance types already have this enabled by default so setting it may have no effect.
+
+               ebs_optimized = true  / false 
+# true instance will use optimized disk performance
+
+enclave_options - used to enable a secure isolated environment (Nitro_enclave) inside the instance  for handling sensitive data; valid value is true or false
+
+              enclave_options {
+                enabled = true
+              }
+
+ephemeral_block_storage - is used to map one or more existing instance store (temporary) volumes to an EC2 instance. These volumes are very fast but data is lost when the instance stops or terminates. Some instance types provide multiple such disks, so they are defined as a set of objects. . 
+                
+              ephemeral_block_device { 
+                device_name = "/dev/sdb" 
+                virtual_name = "ephemeral0"
+               }
+
+
+get_password_data - Used to fetch the administrator password for a Windows EC2 instance by waiting until it is available; valid values are true or false, and the password will be stored in the password_data attribute. 
+
+              get_password_data = true  #  means Terraform will retrieve the Windows admin password.
+
+
+hibernation - if true , the launched instance will support hibernation 
+
+host_id - Used to launch the instance on a specific dedicated physical server instead of shared hardware ; you provide the ID  of that host so the instance runs exactly there. 
+
+               host_id = "h-1234567890abcdef" # means the instance will run on that particular dedicated host.
+
+
+host_resource_group_arn - Used to launch the instance in a group of dedicated hosts instead of a specific one, letting AWS automatically choose a host from that group; when using this, tenancy should be set to "host" (or omitted).
+
+               host_resource_group_arn = "arn:aws:resource-groups:us-west-2:123456789012:group/my-group"  # means the instance will run on one of the hosts in that group.
+
+iam_instance_profile - Used to attach an IAM role to the instance so it can access AWS services without storing credentials; you provide the name of the instance profile and you must have permission (iam:PassRole) to assign it
+
+                iam_instance_profile = "my-ec2-role" means the instance can access AWS services based on that role’s permissions.
+ 
+
+instance_initiated_shutdown_behaviour - Used to decide what happens when the instance is shut down from inside (like using a shutdown command); valid values are "stop" (instance stops and can be started again) and "terminate" (instance is deleted), with default being "stop" for EBS-backed instances and "terminate" for instance-store instances.
+
+                instance_initiated_shutdown_behaviour = terminate # means  the instance will be deleted when shut down .
+
+instance_market_options - Used to choose how you want to run/pay for the instance; valid option is "spot" (cheap but can be interrupted) and if not specified it defaults to on-demand (normal stable instance).
+  
+                 instance_market_options { market_type = "spot" } means the instance will run as a spot instance.
+
+
+instance_type - Used to specify the size and power of the instance (CPU and RAM); if not using a launch template you must provide it, and if both template and this are given then this value overrides the template, and changing it will restart the instance.
+
+                 instance_type = "t2.micro"
+
+ipv6_address_count - sed to specify how many IPv6 addresses should be automatically assigned to the instance’s primary network interface; AWS will pick those addresses from the subnet range
+
+                 ipv6_address_count = 2  #means the instance will get 2 ipv6 address automatically 
+
+
+ipv6_address - Used to manually specify one or more IPv6 addresses for the instance’s primary network interface; the addresses must be from the subnet range. 
+                  ipv6_addresses = ["2001:db8::1", "2001:db8::2"] # means the instance will use these exact IPv6 addresses.
+
+
+key_name - Used to specify the SSH  key pair  name to access the instance  securely this key pair is used for login 
+                  
+                   key_name = "my-key"  #means you will use that key pair to connect to the instance.
+
+
+launch_template - Used to launch the instance using a pre-defined template that already contains settings like AMI, instance type, security groups, etc.; if you also specify values directly in the instance resource, those values will override the template settings
+
+                   launch_template {  id= "lk23-345" version = "1" }
+ 
+maintenance_options - Used to control what happens when AWS performs maintenance on the instance, like whether the instance can automatically recover or behave in a specific way during host maintenance.
+
+                  maintainance_options { 
+                    auto_recovery = "default" /"disabled" 
+                  }
+
+# default = aws handels recovery automatically 
+# disable = no automatic recovery  
+
+metadata_options - Used to control access to the instance metadata service (IMDS), which provides instance details like IP, region, IAM role info, etc., and also helps secure how that metadata can be accessed.
+
+                  metadata_options {
+                    http_token = "required"
+                    http_endpoint = "enabled "
+                    http_put_reponse_hot_limit = 2d
+                  }
+
+# means metadata access is enabled but require a token for security 
+
+
+monitoring - sed to enable detailed CloudWatch monitoring for the instance; if set to true, AWS will collect metrics more frequently, and if false, only basic monitoring is enabled.
+
+                  monitoring = true
+
+network_inteface  - Used to attach and configure a custom network card (network interface) to the instance at launch time, instead of letting AWS automatically create one; it is used when you want full control over IPs, subnets, and security groups for the instance’s network setup
+
+                    network_interface {
+                      network_interface = "eni-1234rt"
+                      device_index =0 
+                    }  
+# means instance will use the specific network card as its main network connection 
+
+placement_group - Used to launch the instance inside a placement group, which is a way to control how EC2 instances are physically placed in AWS for better performance or low latency between them
+
+                   placement_group = "my_Group"
+
+# means instance will be launched inside that placement group 
+
+placement_partition_number - Used to specify which partition (sub-group) inside a partition placement group the instance should go into; it only works when the placement group strategy is "partition", and helps distribute instances across different isolated partitions.
+                    placement_partition_number = 1  # means the instance will be placed in partition 1 of the group.
+
+
+private_dns_name_options - Used to control how the instance’s private DNS name (hostname inside VPC) is generated and shown; if not set, AWS uses the default settings from the subnet.
+
+                   private_dns_name_options { hostname_type = "ip-name" }
+
+# means the instance will use its IP address in the private DNS name 
+
+private_ip - Used to assign a fixed private IP address to the instance inside the VPC instead of letting AWS choose one automatically. 
+
+                   private_ip = "172.16.10.100" #means the instance will always use the specific internal ip 
+
+
+
+secondary_private_ip - Used to assign extra private ipv4 addresses to the instance's main network interfce inside the VPC ; these are additional internal IP's part from the main private IP . 
+
+                   secondary_private_ips = ["172.16.10.101", "172.16.10.102"]      # means the instance will have extra internal IP addresses 
+
+
+security_groups - Used to attach firewall rules (security groups) to the instance, but only works in EC2-Classic or default VPC; it uses security group names to control what traffic is allowed in and out.  
+
+                   security_groups = ["web-sg", "ssh-sg"] # means the instance will follow rules from those security groups.
+
+if you are creating instances in a vpc .use  vpc_security_group_ids instead 
+
+source_dest_check - Used to control whether the instance should allow forwarding traffic that is not directly meant for it; if true (default) it blocks forwarding, and if false it allows the instance to act like a router (used in NAT or VPN setups)
+
+                   source_dest_check = false  # means the instance can forward traffic for other devices.  
+
+subnet_id - Used to specify which subnet inside a VPC the EC2 instance should be launched in; it decides the network location (public/private segment) of the instance. 
+
+                    subnet_id = "subnet-1234567" # MEANS the instance will be created inside that specific subnet
+
+
+
+tags - Used to add labels (key-value pairs) to the EC2 instance for identification, organization, or management; these tags apply only to the instance (not its disks), and if provider-level default tags exist, these tags will override matching ones.
+
+                     tags = {
+                       name = "my-instance",
+                       Env = "Dev"
+                     }
+ # means the instance is labeled as myinstance in DEV environment 
+
+tenancy - Used to decide where the instance runs on AWS hardware; valid values are "default" (shared hardware), "dedicated" (your own single-tenant hardware), and "host" (runs on a dedicated host you manage)
+ 
+                      tenancy = "dedicated"
+
+
+user_data - Used to provide a startup script to the instance that runs automatically when the EC2 instance launches (like installing software or configuring settings).
+ 
+                        user_data = "#!/bin/bash\nyum update -y" means the instance will run this script on startup. If you change it later, the instance may restart or even be recreated depending on settings.
+
+
+
+user_data_base64 - Used to pass startup script or data in base64 format instead of normal text; this is used when the data is not plain text (like compressed/gzipped scripts) so it doesn’t get corrupted
+
+                        user_data_base64 = "IyEvYmluL2Jhc2gK..."
+
+
+# means the encoded script will run when the instance starts. If changed, the instance may restart or be recreated depending on settings.
+
+user_data_replace_on_change - Used to decide what should happen when you change user_data or user_data_base64
+
+# true  the instance will be destroyed  and recreated  when the user data chagnes 
+# false the instance will only restart   instead of full recreate 
+
+         user_data_replace_on_change = true   #means any change in startup script will fully recreate the instance
+
+
+volume_tags - used to add tags to the storage disks ( root and EBS of the instance at the time it is created these tags help identify and manage the disks separately from the instance itself.
+
+                         volume_tags = { Name = "MyDisk", Env = "Dev" }
+
+# means the attached storage volumes will be labeled with those tags
+
+
+vpc_security_group - Used to attach security groups (firewall rules) to the instance inside a VPC; instead of names, you provide the security group IDs, and they control what traffic is allowed in and out of the instance.
+
+                        vpc_security_groups_ids = ["sg-123456", "sg-abcdef"]
+
+ # means those firewall  rules will be applied to the instance 
+
+
+
+
+CAPACITY RESERVATION 
+
+You can specify only one argument at a time if you specify both 
+capacity_reservation_preference  and capacity_reservation_target .the request fails 
+
+Modifying 
+capacity_reservation_preference ro capacity_reservation_target in this block requires the instance to be in stopped state
+
+Capacity reservation specification can be applied / modified  to the Ec2 instance  at creation time or when the instance is stopped 
+
+
+
+capacity_reservation_specification - Used to decide whether the instance should run on reserved AWS compute capacity or normal capacity; valid values are "open" (use reservation if available, otherwise normal) and "none" (don’t use reservation at all, default is "open").
+
+
+               capacity_reservation_specification {
+                 capacity_reservation_preference = "open"
+               }
+
+#open -> use the reserved capacity if available .otherwise use normal ec2 capacity 
+
+# none -> ignore reserved capacity and use the normal ec2 capacity only 
+
+capacity_reservation_target - Used to specify the exact reserved capacity where the EC2 instance should run, instead of letting AWS choose automatically.
+
+
+             capacity_reservation_target {
+               capacity_reservation_id = "cr-123456"
+             }
+
+
+
+cpu_options - Used to control how the CPU is configured for an EC2 instance at launch time, like how many cores it uses, how threads are handled, and whether advanced security CPU features are enabled; changing these values will recreate the instance.
+
+
+cpu_options {
+  core_count       = 2
+  threads_per_core = 1
+  amd_sev_snp      = "disabled" # turn off / on cpu level extra security (only works on specific instance type like m6a ,r6a,c6a
+
+}
+changing any of these -> instance is destroyed and recreated 
+
+
+
+credit_specification {
+   cpu_credits = "standard" /"unlimited"
+}
+
+
+root_block_devices - Used to configure the main storage disk (root volume) of the EC2 instance, where the OS is installed; it controls things like size, encryption, performance, and whether the disk is deleted when the instance is deleted.
+
+
+root_block_device {
+  delete_on_termination = true # if true ,disk is deleted when instance is deleted (default=true)
+  encrypt = true # if true ,disk data is encrypted for security  (default =false )
+  iops-> speed of the disk (input some numbers) used for fast SSD types liek io1,io2,gp3
+  kms_key_id -> custom AWS encryption key for securing the disk ,here we give the kms_key_id
+  tags -> labels for the disk 
+  throughtput - data transfer speed here we give some nubmer
+  volume_size - size of the disk in GB
+  volume_type - type of storage 
+  gp2, gp3 → general SSD (most common)
+  io1, io2 → high performance SSD
+  st1, sc1 → cheap HDD for large data
+  standard → old magnetic disk
+  
+}
+
+changing the encryption or kms_key_id -> instance must be replaced 
+
+
+ebs_block_device - Used to attach and configure extra storage disks (EBS volumes) to an EC2 instance at launch time, like adding additional hard drives apart from the main root disk.
+
+
+argument that come underthis ebs_block_device
+
+delete_on_termination - if true extra disk will be deleted when instance is deleted (default is true)
+device_naem -> name of the disk inside the OS LIKE : /dev/sdf , /dev/xvdf
+encrypted -> true # encrypt the disk if true or else default is false
+iops -> speed of disk 
+kms_key_id -> custom AWS encryption key for disk 
+snapshot_id -> specify this if we are creating the instance from already existing snapshot
+tags -> labels for the disk 
+throughput -> data transfer  speed (only for gp3 in MiB/s)
+volume_size -> the size fo the disk in GB
+volume_type -> the type of the disk 
+
+
+ebs_block_device {
+  device_name           = "/dev/sdf"
+  volume_size           = 20
+  volume_type           = "gp3"
+  encrypted             = true
+  delete_on_termination = true
+}
+
+
+You should NOT mix:
+
+ebs_block_device
+
+aws_ebs_volume + aws_volume_attachment
+
+Because Terraform may get confused and cause drift or duplicate management issues.
+
+
+ephemeral_block_storage {
+  Used to attach temporary storage disks (instance store volume) to an Ec2 instance ,these disks are very fast but data is lost when the instance stopsor terminates 
+
+device_name → name of the disk inside the instance OS (where it will appear)
+
+virtual_name → which temporary disk AWS should attach (like ephemeral0, ephemeral1)
+
+no_device → used to remove/disable a disk that comes by default from the AMI
+
+ephemeral_block_device {
+  device_name  = "/dev/sdb"
+  virtual_name = "ephemeral0"
+}
+
+
+Enclave Options  - Used to enable AWS Nitro Enclaves, which are isolated secure environments inside an EC2 instance for running highly sensitive workloads like encryption, security processing, or confidential data handling.
+
+enabled = true → turns ON Nitro Enclaves (extra secure mini-environment inside EC2)
+
+
+enabled = false → enclaves are not used (default)
+
+
+enclave_options {
+  enabled = true
+
+}
+
+maintenance_optoins - Used to control what AWS should do if the EC2 instance has a hardware or host-level failure, especially whether it should automatically recover the instance or not.
+
+
+auto_recovery = "default" -> AWS will automatically recover the instance if there is a failure 
+auto_recovery =  "disabled" -> AWS will not recover it automatically ; you must handle it manually 
+
+
+                     maintenance_options {
+                       auto_recovery = "disabled" / "default"
+                     }        
+
+
+metadata_options - Used to control how the Ec2 instances metadata service works ,which provide internal info like IP ,region , IAM role and tags .It is mainly used for security and accesss control of that metadata
+
+http_endpoint -> turn metadata_service on or off 
+    enabled -> metadata accessible (default)
+    disable -> block metadata access
+http_protocol_ipv6 -> allow metadata access over ipv6
+    enable / disablr (default is disabled)
+http_put_response_hop_limit -> how far the metadata requests can travel inside the network 
+    value : 1 to 60 (default is 1 , keep it low as possible )
+http_token -> security mode for metadata access
+     required -> must use token ( secure IMDSV2)
+     optional -> no token needed (less secure and default)
+instance_metadata_tags -> allow access to Ec2 tags via metadata 
+     enable or disable (default is disable)
+
+
+metadata_options {
+  http_endpoint               = "enabled"
+  http_tokens                 = "required"
+  http_put_response_hop_limit = 2
+  instance_metadata_tags      = "enabled"
+}
+
+
+
+instance_market_options - Used to decide how you want to buy the EC2 instance, like whether you want a cheaper “spot” instance or a reserved “capacity-block” type purchase.
+
+market_type → type of purchase model
+"spot" → cheap unused AWS capacity (can be stopped anytime ,default)
+capacity-block" → reserved fixed capacity for a period
+
+if you chooose the spot instance you will have extra setting 
+
+
+network_interface - Used to attach a specific pre-created network interface (ENI) to an EC2 instance at boot time so you can control networking (IP, subnet, security group), but it is now deprecated because changing it can recreate the whole instance.
+
+network_interface_id → ID of the network card (ENI) you want to attach
+device_index → position of the network interface
+    0 = main network interface (eth0)
+    1,2... = extra interfaces
+network_card_index → integer index of the network card .limitted by the instance type . The default index is 0
+delete_on_termination -> whether to delete the network interface when instance is deleted (default : false) 
+
+
+primary_network_interface  - Used to define the main network connection (eth0) of the EC2 instance by attaching a specific network interface to it; this is the primary way the instance connects to the network.
+
+               primary_network_interface {
+                 network_interface_id = "eni-1234"
+               }
+* network_interface_id -> ID of the main network card ( ENI ) 
+* delete_on_termination -> tells AWS whether to delete it when instance is deleted (read-only here )
+
+
+primary_network_interface {
+  network_interface_id = "eni-123456"
+}
+
+
+secondary_network_interface - Used to attach extra network cards (ENIs) to an EC2 instance at launch time, usually for special networking needs like high-speed internal communication (RDMA) or separate private networks; these are separate from the main network interface.
+
+secondary_subnet_id → subnet where the extra network card will be created
+network_card_index → which physical network card slot to use (each slot holds one interface)
+device_index → position of the interface inside the instance (default: 0)
+interface_type → type of interface (always "secondary")
+delete_on_termination → delete this network card when instance is deleted (default: true)
+private_ip_address_count → number of private IPs to assign (default: 1)
+private_ip_addresses → manually assign specific private IPs
+
+
+
+
+
+
